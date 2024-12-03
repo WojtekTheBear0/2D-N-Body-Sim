@@ -28,11 +28,18 @@ public class VerletObject {
 
 
     //Verlet Intergration Update 
-    public void update(float dt)
-    {
-        Position = Position.multiply(2).subtract(OldPosition).add(Accel.multiply(dt*dt));
+    public void update(float dt) {
+        if (OldPosition == null) {
+            OldPosition = Position; // Initialize if not set
+        }
+        if (Accel == null) {
+            Accel = new Point2D(0, 0); // Initialize if not set
+        }
+        
+        Point2D temp = Position; // Store current position
+        Position = Position.multiply(2).subtract(OldPosition).add(Accel.multiply(dt * dt));
+        OldPosition = temp; // Update old position for next step
     }
-
     
     // functions you'll prob have to ask me about 
     public void addVelocity(Point2D force, float dt)
@@ -46,7 +53,7 @@ public class VerletObject {
         OldPosition = Position.subtract((force.multiply(dt)));
     }
 
-  
+
     //Getters & Setters 
     public Point2D getPosition() { return Position; }
     public float getRadius() { return radius; }
@@ -60,4 +67,15 @@ public class VerletObject {
     public void SetRadius(float r) { radius = r; }
     public void SetMass(float m) { mass = m; }
     public void SetAcceleration(Point2D a) { Accel = a; }
+
+
+    public void AddAcceleration(Point2D a) {
+        if (Accel == null) {
+            Accel = a;
+        } else {
+            Accel = Accel.add(a); // Accumulate accelerations
+        }
+    }
+
+    
 }

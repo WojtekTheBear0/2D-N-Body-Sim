@@ -1,7 +1,7 @@
 package nbody.PhysicsEngine;
 import java.util.Arrays;
 import java.util.Vector;
-import java.lang.Math; 
+
 import javafx.geometry.Point2D;
 
 public class CollisionManager {
@@ -43,10 +43,10 @@ public class CollisionManager {
                     
                     float mass_ratio_1 = object_1.getRadius() / (object_1.getRadius() + object_2.getRadius());
                     float mass_ratio_2 = object_2.getRadius() / (object_1.getRadius() + object_2.getRadius());
-                    float delta = 0.5f * response_coef * (dist - min_dist);
+                    float delta = 0.5f * response_coef * ((float)dist - (float)min_dist);
                     
-                    object_1.setPosition(pos1.subtract(normal.multiply(mass_ratio_2 * delta)));
-                    object_2.setPosition(pos2.add(normal.multiply(mass_ratio_1 * delta)));
+                    object_1.SetPosition(pos1.subtract(normal.multiply(mass_ratio_2 * delta)));
+                    object_2.SetPosition(pos2.add(normal.multiply(mass_ratio_1 * delta)));
                 }
             }
         }
