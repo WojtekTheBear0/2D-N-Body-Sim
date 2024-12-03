@@ -14,7 +14,7 @@ dependencies {
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21) // Ensure Java 21 is used
+        languageVersion = JavaLanguageVersion.of(23) // Ensure Java 23 is used
     }
 }
 

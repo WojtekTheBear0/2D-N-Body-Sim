@@ -17,6 +17,7 @@ public class VerletObject {
         this.mass = Mass;
     }
 
+
     //Default 
     public VerletObject()
     {
@@ -27,40 +28,36 @@ public class VerletObject {
 
 
     //Verlet Intergration Update 
-    public void update()
+    public void update(float dt)
     {
-
-    };
-
-
+        Position = Position.multiply(2).subtract(OldPosition).add(Accel.multiply(dt*dt));
+    }
 
     
     // functions you'll prob have to ask me about 
     public void addVelocity(Point2D force, float dt)
     {
-
+        OldPosition = OldPosition.subtract(force.multiply(dt));
     }
+
 
     public void SetVelocity(Point2D force, float dt)
     {
-
+        OldPosition = Position.subtract((force.multiply(dt)));
     }
 
-    //Getters & Setters
-    /* 
-    public Point2D getPosition() { return }
-    public float getRadius() { return  }
-    public float getMass() { return  }
-    public Point2D getAcceleration() { return }
-    public Point2D GetForce() {return }
-    public Point2D getVelo() { return }
 
-    public void SetPosition() { return }
-    public void SetRadius() { return  }
-    public void SetMass() { return  }
-    public Void SetAcceleration() { return }
+    //Getters & Setters 
+    public Point2D getPosition() { return Position; }
+    public float getRadius() { return radius; }
+    public float getMass() { return mass; }
+    public Point2D getAcceleration() { return Accel; }
+    public Point2D getForce() { return Accel.multiply(mass); }
 
+    public Point2D getVelo(float dt) { return Position.subtract(OldPosition).multiply(1.0 / dt); }
 
-
-*/
+    public void SetPosition(Point2D pos) { Position = pos; }
+    public void SetRadius(float r) { radius = r; }
+    public void SetMass(float m) { mass = m; }
+    public void SetAcceleration(Point2D a) { Accel = a; }
 }
