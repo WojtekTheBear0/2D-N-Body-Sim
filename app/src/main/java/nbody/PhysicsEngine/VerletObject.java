@@ -46,7 +46,7 @@ public class VerletObject {
         OldPosition = Position.subtract((force.multiply(dt)));
     }
 
-
+  
     //Getters & Setters 
     public Point2D getPosition() { return Position; }
     public float getRadius() { return radius; }
