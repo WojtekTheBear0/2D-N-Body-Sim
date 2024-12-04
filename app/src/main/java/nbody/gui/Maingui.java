@@ -1,15 +1,19 @@
 package nbody.gui;
 
-import javafx.scene.control.TextFormatter;
-import javafx.scene.control.TextField;
-import javafx.scene.control.*;
-import javafx.scene.layout.GridPane;
-
-
 import java.util.function.UnaryOperator;
 import java.util.regex.Pattern;
 
-public class Maingui {
+import javafx.application.Application;
+import javafx.scene.Scene;
+import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
+import javafx.scene.control.Label;
+import javafx.scene.control.TextField;
+import javafx.scene.control.TextFormatter;
+import javafx.scene.layout.GridPane;
+import javafx.stage.Stage;
+
+public class Maingui extends Application {
 
     private GridPane grid;
 
@@ -19,12 +23,6 @@ public class Maingui {
 
     private Label massVarianceLabel;
     private TextField massVarianceField;
-
-    private Label accelerationLabel;
-    private TextField accelerationField;
-
-    private Label accVarianceLabel;
-    private TextField accVarianceField;
 
     private Label distanceLabel;
     private TextField distanceField;
@@ -38,6 +36,7 @@ public class Maingui {
     private Label timestepLabel;
     private TextField timestepField;
 
+    private CheckBox trackSingleCheck;
     private Label singleTrackLabel;
     private TextField singleTrackField;
 
@@ -48,6 +47,9 @@ public class Maingui {
     private Label secondObjectLabel;
     private TextField secondObjectField;
 
+    private CheckBox allCheck;
+
+    private Button backButton;
     private Button runButton;
 
     public Maingui() {
@@ -64,12 +66,6 @@ public class Maingui {
         massVarianceLabel = new Label("Mass Variance:");
         massVarianceField = createNumericTextField();
 
-        accelerationLabel = new Label("Acceleration (m/s²):");
-        accelerationField = createNumericTextField();
-
-        accVarianceLabel = new Label("Acceleration Variance:");
-        accVarianceField = createNumericTextField();
-
         distanceLabel = new Label("Distance (m):");
         distanceField = createNumericTextField();
 
@@ -82,17 +78,22 @@ public class Maingui {
         timestepLabel = new Label("Integration Timesteps:");
         timestepField = createNumericTextField();
 
-        singleTrackLabel = new Label("Particle to Track:");
+        trackSingleCheck = new CheckBox("Track Object");
+
+        singleTrackLabel = new Label("Object to Track:");
         singleTrackField = createNumericTextField();
 
         trackRelationshipsCheck = new CheckBox("Track Specific Relationship");
 
-        firstObjectLabel = new Label("Particle 1:");
+        firstObjectLabel = new Label("Object 1:");
         firstObjectField = createNumericTextField();
 
-        secondObjectLabel = new Label("Particle 2:");
+        secondObjectLabel = new Label("Object 2:");
         secondObjectField = createNumericTextField();
 
+        allCheck = new CheckBox("Track All Objects");
+
+        backButton = new Button("Cancel");
         runButton = new Button("Run Simulation");
 
         // Add components to the grid
@@ -102,12 +103,6 @@ public class Maingui {
 
         grid.add(massVarianceLabel, 0, row);
         grid.add(massVarianceField, 1, row++);
-
-        grid.add(accelerationLabel, 0, row);
-        grid.add(accelerationField, 1, row++);
-
-        grid.add(accVarianceLabel, 0, row);
-        grid.add(accVarianceField, 1, row++);
 
         grid.add(distanceLabel, 0, row);
         grid.add(distanceField, 1, row++);
@@ -121,6 +116,9 @@ public class Maingui {
         grid.add(timestepLabel, 0, row);
         grid.add(timestepField, 1, row++);
 
+        grid.add(trackSingleCheck, 0, row, 2, 1);
+        row++;
+
         grid.add(singleTrackLabel, 0, row);
         grid.add(singleTrackField, 1, row++);
 
@@ -133,13 +131,28 @@ public class Maingui {
         grid.add(secondObjectLabel, 0, row);
         grid.add(secondObjectField, 1, row++);
 
-        grid.add(runButton, 0, row, 2, 1);
+        grid.add(allCheck, 0, row, 2, 1);
+        row++;
+
+        grid.add(backButton, 0, row, 2, 1);
+        grid.add(runButton, 1, row, 2, 1);
     }
 
+
+    @Override
+    public void start(Stage primaryStage) {
+        Scene scene = new Scene(getGrid(), 400, 400);
+        primaryStage.setTitle("N-Body Simulation");
+        primaryStage.setScene(scene);
+
+        primaryStage.show();
+    }
+
+    
     // Method to create numeric TextField
     private TextField createNumericTextField() {
         TextField textField = new TextField();
-        Pattern pattern = Pattern.compile("\\d*"); // Only digits allowed
+        Pattern pattern = Pattern.compile("\\d*\\.?\\d*"); // Only digits allowed
         UnaryOperator<TextFormatter.Change> filter = change -> {
             if (pattern.matcher(change.getControlNewText()).matches()) {
                 return change;
@@ -151,8 +164,14 @@ public class Maingui {
         return textField;
     }
 
+
     // Getter for the grid
     public GridPane getGrid() {
         return grid;
+    }
+
+
+    public static void main(String[] args) {
+        launch(args);
     }
 }
