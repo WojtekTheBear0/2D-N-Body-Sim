@@ -14,7 +14,7 @@ dependencies {
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(23) // Ensure Java 23 is used
+        languageVersion = JavaLanguageVersion.of(21) // Ensure Java 23 is used
     }
 }
 
@@ -32,8 +32,18 @@ run {
     jvmArgs = [
         "--module-path", System.getProperty('os.name').toLowerCase().contains('win') ?
             "path/to/javafx-sdk/lib" : "${System.getProperty('java.home')}/lib",
-        '--add-modules', 'javafx.controls,javafx.graphics'
+        '--add-modules', 'javafx.controls,javafx.graphics',
+
+        
+        '-Dcom.sun.management.jmxremote',
+        '-Dcom.sun.management.jmxremote.port=9010',
+        '-Dcom.sun.management.jmxremote.authenticate=false',
+        '-Dcom.sun.management.jmxremote.ssl=false',
+        '-Djava.rmi.server.hostname=localhost'
+    
     ]
+
+    
 }
 
 tasks.named('test') {

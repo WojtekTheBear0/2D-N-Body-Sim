@@ -1,5 +1,9 @@
 package nbody.PhysicsEngine;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.Vector;
 
 import javafx.geometry.Point2D;
@@ -9,16 +13,99 @@ public class CollisionManager {
     float gravity;
     Vector<Integer> Boundaries = new Vector<>(Arrays.asList(0,0,0,0));
     Vector<VerletObject> m_objects;
+    private final SpatialHashing<VerletObject> spatialHash;
 
     public CollisionManager(float f, float g, Vector<VerletObject> objs) {   
         m_objects = objs;
         friction = f;
         gravity = g;
+        spatialHash = new SpatialHashing<>();
+
     }
 
     public CollisionManager(Vector<VerletObject> objs) {   
         m_objects = objs;
+        spatialHash = new SpatialHashing<>();
+
     }
+
+
+
+    public void SpatialHashCollision()
+    {
+        spatialHash.clear();
+        insertObjectsIntoHash();
+              spatialHash.processCollisions((object1, object2) -> {
+            handleCollision(object1, object2);
+        });
+
+    }
+
+public void quadTreeCollision() {
+    float response_coef = 0.75f;
+    
+    QuadTree.QuadTreeObject<VerletObject> helper = new QuadTree.QuadTreeObject<>() {
+        @Override
+        public Point2D getPosition(VerletObject object) {
+            return object.getPosition();
+        }
+        
+        @Override
+        public float getRadius(VerletObject object) {
+            return object.getRadius();
+        }
+    };
+    
+    // Create quadtree
+    QuadTree<VerletObject> quadTree = new QuadTree<>(0, new QuadTree.Rectangle(0, 0, 2000, 2000), helper);
+    
+    // Insert all objects into quadtree
+    for (VerletObject obj : m_objects) {
+        if (obj.getPosition() != null) {  // Add null check
+            quadTree.insert(obj);
+        }
+    }
+    
+    // Check collisions
+    List<VerletObject> potentialCollisions = new ArrayList<>();
+    for (VerletObject object1 : m_objects) {
+        if (object1.getPosition() == null) continue;  // Skip if position is null
+        
+        potentialCollisions.clear();
+        quadTree.findPotentialCollisions(object1, potentialCollisions);
+        
+        for (VerletObject object2 : potentialCollisions) {
+            if (object1 == object2) continue;
+            
+            Point2D position1 = object1.getPosition();
+            Point2D position2 = object2.getPosition();
+            
+            if (position1 == null || position2 == null) continue;  // Skip if either position is null
+            
+            float radius1 = object1.getRadius();
+            float radius2 = object2.getRadius();
+
+            double dx = position1.getX() - position2.getX();
+            double dy = position1.getY() - position2.getY();
+            double distSquared = dx * dx + dy * dy;
+            float minDist = radius1 + radius2;
+
+            if (distSquared < minDist * minDist) {
+                double dist = Math.sqrt(distSquared);
+                Point2D normal = new Point2D(dx / dist, dy / dist);
+
+                float massRatio1 = radius1 / (radius1 + radius2);
+                float massRatio2 = radius2 / (radius1 + radius2);
+                float delta = 0.5f * response_coef * ((float) dist - minDist);
+
+                object1.SetPosition(position1.subtract(normal.multiply(massRatio2 * delta)));
+                object2.SetPosition(position2.add(normal.multiply(massRatio1 * delta)));
+            }
+        }
+    }
+}
+
+
 
     public void BruteForceSolve() {        
         float response_coef = 0.75f;
@@ -51,4 +138,48 @@ public class CollisionManager {
             }
         }
     }
+
+    
+    
+    private void insertObjectsIntoHash() {
+        for (int i = 0; i < m_objects.size(); i++) {
+            VerletObject obj = m_objects.get(i);
+            Point2D pos = obj.getPosition();
+            int x = (int) pos.getX();
+            int y = (int) pos.getY();
+            
+
+                spatialHash.insert(pos,obj);
+
+        }
+    }
+
+    
+    private void handleCollision(VerletObject object1, VerletObject object2) {
+        float response_coef = 0.75f;
+        Point2D position1 = object1.getPosition();
+        Point2D position2 = object2.getPosition();
+        float radius1 = object1.getRadius();
+        float radius2 = object2.getRadius();
+
+        double dx = position1.getX() - position2.getX();
+        double dy = position1.getY() - position2.getY();
+        double distSquared = dx * dx + dy * dy;
+        float minDist = radius1 + radius2;
+
+        if (distSquared < minDist * minDist) {
+            double dist = Math.sqrt(distSquared);
+            Point2D normal = new Point2D(dx / dist, dy / dist);
+
+            float massRatio1 = radius1 / (radius1 + radius2);
+            float massRatio2 = radius2 / (radius1 + radius2);
+            float delta = 0.5f * response_coef * ((float) dist - minDist);
+
+            object1.SetPosition(position1.subtract(normal.multiply(massRatio2 * delta)));
+            object2.SetPosition(position2.add(normal.multiply(massRatio1 * delta)));
+        }
+    }
+
+
 }
+

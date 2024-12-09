@@ -1,7 +1,6 @@
 package nbody;
 
 import java.util.Random;
-import java.util.Vector;
 
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
@@ -12,17 +11,16 @@ import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.stage.Stage;
-import nbody.PhysicsEngine.CollisionManager;
 import nbody.PhysicsEngine.VerletObject;
+import nbody.PhysicsEngine.simulation;
 import nbody.gui.Maingui;
 
 public class Main extends Application {
-    private static final int WIDTH = 800;
-    private static final int HEIGHT = 600;
-    private static final int NUM_BODIES = 250;
+    private static final int WIDTH = 750;
+    private static final int HEIGHT = 750;
+    private static final int NUM_BODIES = 4000;
     
-    private Vector<VerletObject> objects = new Vector<>();
-    private CollisionManager collisionManager;
+    private simulation sim;
     private long lastTime = 0;
 
     @Override
@@ -36,13 +34,24 @@ public class Main extends Application {
         secondaryStage.setTitle("Simulation Controls");
         secondaryStage.setScene(scene2);
 
-        initializeObjects();
-        collisionManager = new CollisionManager(objects);
+        // Initialize simulation
+        sim = new simulation(WIDTH,HEIGHT);
+        //sim.setBoundaries(0, WIDTH, 0, HEIGHT);
+        sim.setSimuationUpdateRate(60);  // 60 FPS
+        sim.setSubStepsCount(1);         // 8 substeps for stability
+       // sim.setGravity(new Point2D(0, 20.81));  // Same gravity as original
+        
+       Point2D spawnPos = new Point2D(10, 10);
+
+        // initializeObjects();
+
+        System.out.println("Number of objects initialized: " + sim.getSystemManager().getObjectCount());
 
         AnimationTimer timer = new AnimationTimer() {
             @Override
             public void handle(long now) {
                 // Calculate delta time
+                //Get rid of this 
                 float dt;
                 if (lastTime == 0) {
                     dt = 0.016f; // Initial default timestep (roughly 60 FPS)
@@ -50,18 +59,19 @@ public class Main extends Application {
                     dt = (float)((now - lastTime) / 1e9); // Convert nanoseconds to seconds
                 }
                 lastTime = now;
-
+                
+                // End  
+                sim.addStream(spawnPos,5);
                 // Clear canvas
                 gc.setFill(Color.BLACK);
                 gc.fillRect(0, 0, WIDTH, HEIGHT);
 
                 // Update physics
-                updateObjects(dt);
-                collisionManager.BruteForceSolve();
+                sim.update();
 
                 // Draw objects
                 gc.setFill(Color.SKYBLUE);
-                for (VerletObject obj : objects) {
+                for (VerletObject obj : sim.getSystemManager().getObjects()) {
                     Point2D pos = obj.getPosition();
                     float radius = obj.getRadius();
                     gc.fillOval(pos.getX() - radius, pos.getY() - radius, radius * 2, radius * 2);
@@ -79,6 +89,8 @@ public class Main extends Application {
         timer.start();
     }
 
+
+    //Not in use ATM
     private void initializeObjects() {
         Random rand = new Random();
         for (int i = 0; i < NUM_BODIES; i++) {
@@ -94,27 +106,10 @@ public class Main extends Application {
                 (rand.nextDouble() - 0.5) * 4,
                 (rand.nextDouble() - 0.5) * 4
             );
-            obj.SetVelocity(velocity, 0.016f); // Use initial timestep for velocity setup
+            obj.SetVelocity(velocity, 0.016f);
             
-            objects.add(obj);
-        }
-    }
-
-    private void updateObjects(float dt) {
-        for (VerletObject obj : objects) {
-            Point2D Grav = new Point2D(0,1);
-            // Update position using Verlet integration
-            obj.update(dt);
-            
-            // Handle boundary conditions
-            Point2D pos = obj.getPosition();
-            Point2D newPos = new Point2D(
-                Math.max(obj.getRadius(), Math.min(WIDTH - obj.getRadius(), pos.getX())),
-                Math.max(obj.getRadius(), Math.min(HEIGHT - obj.getRadius(), pos.getY()))
-            );
-     
-            obj.SetPosition(newPos);
-            obj.AddAcceleration(Grav);
+            // Add object to simulation
+            sim.addObject(obj);
         }
     }
 

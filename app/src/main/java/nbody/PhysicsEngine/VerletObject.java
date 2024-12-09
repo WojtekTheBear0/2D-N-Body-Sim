@@ -39,6 +39,7 @@ public class VerletObject {
         Point2D temp = Position; // Store current position
         Position = Position.multiply(2).subtract(OldPosition).add(Accel.multiply(dt * dt));
         OldPosition = temp; // Update old position for next step
+        resetAcceleration();
     }
     
     // functions you'll prob have to ask me about 
@@ -67,8 +68,11 @@ public class VerletObject {
     public void SetRadius(float r) { radius = r; }
     public void SetMass(float m) { mass = m; }
     public void SetAcceleration(Point2D a) { Accel = a; }
-
-
+ 
+    public void SetPreviousPosition(Point2D prevPos) {
+        OldPosition = prevPos;
+    }
+    
     public void AddAcceleration(Point2D a) {
         if (Accel == null) {
             Accel = a;
@@ -76,6 +80,30 @@ public class VerletObject {
             Accel = Accel.add(a); // Accumulate accelerations
         }
     }
+
+    public void resetAcceleration() {
+        Accel = new Point2D(0, 0);
+    }
+
+
+
+    public float getPositionX() {
+        return (float) Position.getX();
+    }
+
+    public float getPositionY() {
+        return (float) Position.getY();
+    }
+
+    
+    public void setPositionX(float x) {
+        Position = new Point2D(x, Position.getY());
+    }
+
+    public void setPositionY(float y) {
+        Position = new Point2D(Position.getX(), y);
+    }
+
 
     
 }
