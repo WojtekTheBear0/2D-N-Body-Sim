@@ -1,130 +1,154 @@
 package nbody.PhysicsEngine;
+
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.*;
 import javafx.geometry.Point2D;
+import javafx.util.Pair;
 
 public class SpatialHashing<T> {
-    // Constants
-    private static final int MAX_OBJECTS_PER_CELL = 100;
-    private static final int MAX_NEIGHBORS = 8;
+    private static final int DEFAULT_CELL_SIZE = 25; // Increased from 8 for better performance
+    private final int width = 1000; // Match your quadtree dimensions
+    private final int height = 1000;
+    private final int cellSize;
+    private final int gridWidth;
+    private final int gridHeight;
+    private final ConcurrentMap<Integer, Set<T>> grid;
     
-    // Configuration
-    private final float min = 0;
-    private final float max = 500;
-    private final int cellSize = 25;
-    private final int width;
-    private final int conversionFactor;
-    
-    // Main storage
-    private final Map<Integer, Set<T>> grid;
-    
-    // Reusable collections to prevent allocations
-    private final Set<T> reusableSet;
-    private final List<T> reusableList;
-    private final GridCell tempCell;
-    private final Point2D tempPoint;
-    private final GridCell[] neighborCells;
-    
+    private final ExecutorService executor; // Fixed thread pool
+
     public interface CollisionCallback<T> {
         void processCollision(T object1, T object2);
     }
-    
-    private static class GridCell {
-        int gridCell;
-        
-        // Im trying to avoid division
-        void update(Point2D point, int cellSize, int conversionFactor, int width) {
-            int x = (int)(point.getX() / cellSize);
-            int y = (int)(point.getY() / cellSize);
-            this.gridCell = x * conversionFactor + y * conversionFactor * width;
-        }
-        
-    //Ignore this im dumb.
-        void update(int x, int y, int width) {
-            this.gridCell = x + y * width;
-        }
-        
-        @Override
-        public int hashCode() {
-            return gridCell;
-        }
-    }
-    
-    public SpatialHashing() {
-        this.width = ((int)max - (int)min) / cellSize;
-        this.conversionFactor = 1 / cellSize;
-        
-        // Initialize main storage
-        this.grid = new HashMap<>();
-        
-        // Initialize reusable objects
-        this.reusableSet = new HashSet<>();
-        this.reusableList = new ArrayList<>(MAX_OBJECTS_PER_CELL);
-        this.tempCell = new GridCell();
-        this.tempPoint = new Point2D(0, 0);
-        this.neighborCells = new GridCell[MAX_NEIGHBORS];
-        
-        // Initialize neighbor cells array
-        for (int i = 0; i < MAX_NEIGHBORS; i++) {
-            neighborCells[i] = new GridCell();
-        }
-    }
-    
 
-    //Is this best implemntation?
-    public void processCollisions(CollisionCallback<T> callback) {
-        // Process each cell
-        for (Set<T> objectsInCell : grid.values()) {
-            if (objectsInCell == null || objectsInCell.size() < 2) continue;
-            
-            // Process objects within the same cell
-            reusableList.clear();
-            reusableList.addAll(objectsInCell);
-            
-            int size = reusableList.size();
-            for (int i = 0; i < size; i++) {
-                T obj1 = reusableList.get(i);
-                for (int j = i + 1; j < size; j++) {
-                    callback.processCollision(obj1, reusableList.get(j));
-                }
-            }
-        }
+    /**
+     * Default thread count constructor.
+     */
+    public SpatialHashing() {
+        this(DEFAULT_THREAD_COUNT);
     }
-    
-    public void insert(Point2D point, T object) {
-        tempCell.update(point, cellSize, conversionFactor, width);
-        grid.computeIfAbsent(tempCell.gridCell, k -> new HashSet<>()).add(object);
-    }
-    
-    public void insert(int x, int y, T object) {
-        tempCell.update(x, y, width);
-        grid.computeIfAbsent(tempCell.gridCell, k -> new HashSet<>()).add(object);
-    }
-    
-    public Set<T> getPotentialCollisions(Point2D point) {
-        reusableSet.clear();
+
+    /**
+     * Constructor allowing specification of thread count.
+     * @param threadCount The number of threads in the pool.
+     */
+    public SpatialHashing(int threadCount) {
+        this.cellSize = DEFAULT_CELL_SIZE;
+        this.gridWidth = width / cellSize + 1;
+        this.gridHeight = height / cellSize + 1;
+        this.grid = new ConcurrentHashMap<>(gridWidth * gridHeight);
         
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dy = -1; dy <= 1; dy++) {
-                double newX = point.getX() + dx * cellSize;
-                double newY = point.getY() + dy * cellSize;
-                
-                tempCell.update(new Point2D(newX, newY), cellSize, conversionFactor, width);
-                Set<T> cellObjects = grid.get(tempCell.gridCell);
-                if (cellObjects != null) {
-                    reusableSet.addAll(cellObjects);
-                }
-            }
-        }
-        
-        return new HashSet<>(reusableSet);
+        // Initialize a fixed thread pool with the specified number of threads
+        this.executor = Executors.newFixedThreadPool(DEFAULT_THREAD_COUNT);
     }
-    
+
+    private static final int DEFAULT_THREAD_COUNT = 6; // Example default
+
+    private int hashCoords(int x, int y) {
+        return x + y * gridWidth;
+    }
+
     public void clear() {
         grid.clear();
+    }
+
+    public void insert(Point2D pos, T object) {
+        if (pos == null) return;
+
+        int gridX = (int) (pos.getX() / cellSize);
+        int gridY = (int) (pos.getY() / cellSize);
+
+        // Add to primary cell
+        insertIntoCell(gridX, gridY, object);
+
+        // Add to neighboring cells if near borders
+        float localX = (float) (pos.getX() - (gridX * cellSize));
+        float localY = (float) (pos.getY() - (gridY * cellSize));
+        float buffer = 5.0f;
+
+        if (localX < buffer) {
+            insertIntoCell(gridX - 1, gridY, object);
+        } else if (localX > cellSize - buffer) {
+            insertIntoCell(gridX + 1, gridY, object);
+        }
+
+        if (localY < buffer) {
+            insertIntoCell(gridX, gridY - 1, object);
+        } else if (localY > cellSize - buffer) {
+            insertIntoCell(gridX, gridY + 1, object);
+        }
+    }
+
+    private void insertIntoCell(int gridX, int gridY, T object) {
+        if (gridX < 0 || gridY < 0 || gridX >= gridWidth || gridY >= gridHeight) {
+            return;
+        }
+        int hash = hashCoords(gridX, gridY);
+        grid.computeIfAbsent(hash, k -> ConcurrentHashMap.newKeySet()).add(object);
+    }
+
+    public void insertAll(List<Pair<Point2D, T>> objects) {
+        objects.parallelStream().forEach(pair -> {
+            insert(pair.getKey(), pair.getValue());
+        });
+    }
+
+    /**
+     * Processes collisions using a fixed number of threads.
+     * @param callback The collision callback to handle collision logic.
+     */
+    public void processCollisions(CollisionCallback<T> callback) {
+        List<Future<?>> futures = new ArrayList<>();
+
+        for (Set<T> cellObjects : grid.values()) {
+            if (cellObjects == null || cellObjects.size() < 2) continue;
+
+            // Submit a collision processing task for each cell
+            Future<?> future = executor.submit(() -> {
+                List<T> objects = new ArrayList<>(cellObjects);
+                int size = objects.size();
+
+                for (int i = 0; i < size; i++) {
+                    T obj1 = objects.get(i);
+                    for (int j = i + 1; j < size; j++) {
+                        callback.processCollision(obj1, objects.get(j));
+                    }
+                }
+            });
+            futures.add(future);
+        }
+
+        // Wait for all tasks to complete
+        for (Future<?> future : futures) {
+            try {
+                future.get(); // This will block until the individual task is complete
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt(); // Restore interrupted status
+                // Optionally handle the interruption
+            } catch (ExecutionException e) {
+                // Handle exceptions thrown by the task
+                e.printStackTrace();
+            }
+        }
+    }
+
+    /**
+     * Shuts down the executor service gracefully.
+     * Should be called when the SpatialHashing instance is no longer needed.
+     */
+    public void shutdown() {
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(60, TimeUnit.SECONDS)) { // Wait for existing tasks to terminate
+                executor.shutdownNow(); // Force shutdown if not terminated
+                if (!executor.awaitTermination(60, TimeUnit.SECONDS)) {
+                    System.err.println("Executor did not terminate");
+                }
+            }
+        } catch (InterruptedException ie) {
+            executor.shutdownNow(); // Re-cancel if current thread is interrupted
+            Thread.currentThread().interrupt(); // Preserve interrupt status
+        }
     }
 }

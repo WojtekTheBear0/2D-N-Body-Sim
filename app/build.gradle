@@ -14,18 +14,35 @@ dependencies {
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21) // Ensure Java 23 is used
+        languageVersion = JavaLanguageVersion.of(21)
     }
 }
 
 application {
-    mainModule = 'nbody'  // Name of your module
-    mainClass = 'nbody.Main' // Main class with your `start` method
+    mainModule = 'nbody'
+    mainClass = 'nbody.Main'
 }
 
 javafx {
-    version = "23.0.1" // Use the latest JavaFX version
+    version = "23.0.1"
     modules = ['javafx.controls', 'javafx.base', 'javafx.graphics', 'javafx.fxml']
+}
+
+// Add this sourceSets configuration to include resources
+sourceSets {
+    main {
+        resources {
+            srcDirs = ['src/main/resources', 'images']  // Add your images directory
+            include '**/*.png'  // Include all PNG files
+            include '**/*.jpg'  // Include all JPG files
+            include '**/*.gif'  // Include all GIF files
+        }
+    }
+}
+
+// Ensure resources are processed during build
+processResources {
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
 }
 
 run {
@@ -33,17 +50,13 @@ run {
         "--module-path", System.getProperty('os.name').toLowerCase().contains('win') ?
             "path/to/javafx-sdk/lib" : "${System.getProperty('java.home')}/lib",
         '--add-modules', 'javafx.controls,javafx.graphics',
-
         
         '-Dcom.sun.management.jmxremote',
         '-Dcom.sun.management.jmxremote.port=9010',
         '-Dcom.sun.management.jmxremote.authenticate=false',
         '-Dcom.sun.management.jmxremote.ssl=false',
         '-Djava.rmi.server.hostname=localhost'
-    
     ]
-
-    
 }
 
 tasks.named('test') {

@@ -1,221 +1,189 @@
 package nbody;
 
-import java.io.BufferedWriter;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.util.Random;
-import java.util.Vector;
-
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
 import javafx.geometry.Point2D;
+import javafx.geometry.Rectangle2D;
 import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.control.Button;
+import javafx.scene.image.Image;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
+import javafx.stage.Screen;
 import javafx.stage.Stage;
-import nbody.PhysicsEngine.CollisionManager;
+import nbody.PhysicsEngine.ImageQualityHandler;
 import nbody.PhysicsEngine.VerletObject;
+import nbody.PhysicsEngine.simulation;
 import nbody.gui.Maingui;
 
 public class Main extends Application {
-    private static final int WIDTH = 800;
-    private static final int HEIGHT = 600;
+    private static final int SIM_WIDTH = 500;    
+    private static final int SIM_HEIGHT = 500;   
     
-    
-    private Vector<VerletObject> objects = new Vector<>();
-    private CollisionManager collisionManager;
+    private simulation sim;
     private long lastTime = 0;
+    private boolean useImageColors = false;
+    private Map<Integer, Color> streamColorMap = new HashMap<>();
+    private int colorIndex = 0;
+    private boolean isRunning = true;
+    private int totalParticlesCreated = 0;
+    
+    private ImageQualityHandler imageHandler = new ImageQualityHandler();
 
+    private void loadImageColors() {
+        try {
+            Image sourceImage = new Image(getClass().getResourceAsStream("/images/lancer.png"));
+            if (sourceImage.isError()) {
+                System.err.println("Error loading image: " + sourceImage.getException());
+                return;
+            }
+            
+            imageHandler.loadAndProcessImage(sourceImage, SIM_WIDTH, SIM_HEIGHT);
+            useImageColors = true;
+            
+            // Save current particle positions and their colors
+            streamColorMap.clear();
+            List<VerletObject> objects = sim.getSystemManager().getObjects();
+            for (int i = 0; i < objects.size(); i++) {
+                Point2D pos = objects.get(i).getPosition();
+                Color color = getColorForPosition(pos);
+                streamColorMap.put(i, color);
+                objects.get(i).setColor(color);  // Immediately apply color
+                System.out.println("Saved color for particle " + i + ": " + color); // Debug print
+            }
+            totalParticlesCreated = objects.size();
+            colorIndex = objects.size();  // Set color index to current size
+            
+        } catch (Exception e) {
+            System.err.println("Failed to load image: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    private Color getColorForPosition(Point2D position) {
+        return imageHandler.getColorForPosition(position, SIM_WIDTH, SIM_HEIGHT);
+    }
+
+    private void initializeSimulation() {
+        sim = new simulation(SIM_WIDTH, SIM_HEIGHT);
+        sim.setSimuationUpdateRate(60);
+        sim.setSubStepsCount(5);
+        sim.setBoundaries(0, SIM_HEIGHT, 0, SIM_WIDTH);
+
+        sim.setStreamPosition(0, new Point2D(0, 0));
+        sim.setStreamPosition(1, new Point2D(0, 25));
+        sim.setStreamPosition(2, new Point2D(0, 50));
+        
+        colorIndex = 0;
+    }
+
+    private void clearScene() {
+        sim.getSystemManager().clearObjects();
+    }
 
     @Override
     public void start(Stage primaryStage) {
+        Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();
+        
+        Canvas canvas = new Canvas(screenBounds.getWidth(), screenBounds.getHeight());
+        GraphicsContext gc = canvas.getGraphicsContext2D();
+        
         Maingui gui = new Maingui();
-
-        gui.setOnRun(values -> {
-            Canvas canvas = new Canvas(WIDTH, HEIGHT);
-            GraphicsContext gc = canvas.getGraphicsContext2D();
-
-            initializeObjects(values.getObjectCount(), values.getMass(), values.getMassVariance(),
-                    values.getDiameter(), values.getDiameterVariance());
-            collisionManager = new CollisionManager(objects);
-
-            AnimationTimer timer = new AnimationTimer() {
-                private double elapsedTime = 0; // Track simulation time
-                private BufferedWriter singleWriter;
-                private BufferedWriter duoWriter;
-                private BufferedWriter allWriter;
-
-                {
-                    // Initialize file writer based on the selected tracking option
-                    try {
-                        if (values.getSingleTrackObject() != null) {
-                            singleWriter = new BufferedWriter(new FileWriter("single_object_tracking.txt"));
-                            singleWriter.write("Mass: " + objects.get(values.getSingleTrackObject()).getMass() + " kg\n");
-                            singleWriter.write("Diameter: " + objects.get(values.getSingleTrackObject()).getRadius() * 2 + " m\n\n");
-                            singleWriter.write("Time (s)\tAcceleration (m/s²)\tVelocity (m/s)\tPosition (m, m)\t\tForces felt (N)\n");
-                        } 
-                        if (values.getRelationshipObject1() != null) {
-                            duoWriter = new BufferedWriter(new FileWriter("two_object_relationship_tracking.txt"));
-                            duoWriter.write("Mass 1: " + objects.get(values.getRelationshipObject1()).getMass() + " kg\n");
-                            duoWriter.write("Diameter 1: " + objects.get(values.getRelationshipObject1()).getRadius() * 2 + " m\n");
-                            duoWriter.write("Mass 2: " + objects.get(values.getRelationshipObject2()).getMass() + " kg\n");
-                            duoWriter.write("Diameter 2: " + objects.get(values.getRelationshipObject2()).getRadius() * 2 + " m\n\n");
-                            duoWriter.write("Time (s)\tDistance (m)\tGravitational Force (N)\n");
-                        } 
-                        if (values.isTrackAll()) {
-                            allWriter = new BufferedWriter(new FileWriter("all_object_tracking.txt"));
-                            allWriter.write("Number of objects: " + objects.size() + "\n\n");
-                            allWriter.write("Time (s)     Force(N)");
-                            allWriter.write("\n\n");
-                        }
-                    } 
-                    catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                } 
-
-                @Override
-                public void handle(long now) {
-                    // Calculate delta time
-                    float dt;
-                    if (lastTime == 0) {
-                        dt = 0.016f; // Initial default timestep (roughly 60 FPS)
-                    } else {
-                        dt = (float)((now - lastTime) / 1e9); // Convert nanoseconds to seconds
-                    }
-                    lastTime = now;
-                    elapsedTime += dt;
-
-                     
-                    // Stop tracking if time exceeds the specified limit
-                    if (elapsedTime > values.getTimeToTrack()) {
-                        stop();
-                        return; 
-                    }
-                    
-
-                    // Clear canvas
-                    gc.setFill(Color.BLACK);
-                    gc.fillRect(0, 0, WIDTH, HEIGHT);
-
-                    // Update physics
-                    updateObjects(dt);
-
-                    if (values.useBruteForce())
-                        collisionManager.BruteForceSolve();
-                    else
-                        return;
-
-                    // Draw objects
-                    gc.setFill(Color.SKYBLUE);
-                    for (VerletObject obj : objects) {
-                        Point2D pos = obj.getPosition();
-                        float radius = obj.getRadius();
-                        gc.fillOval(pos.getX() - radius, pos.getY() - radius, radius * 2, radius * 2);
-                    }
-
-                    
-                    // Write tracking data
-                    try {
-                        if (values.getSingleTrackObject() != null) {
-                            VerletObject obj = objects.get(0); // Assuming the first object is tracked
-                            singleWriter.write(String.format("%.2f\t\t%.2f\t\t\t%.2f\t\t(%.2f, %.2f)\t\t%.2f\n",
-                                    elapsedTime, obj.getAcceleration().magnitude(),
-                                    obj.getVelo(dt).magnitude(),
-                                    obj.getPosition().getX(), obj.getPosition().getY(),
-                                    obj.getForce().magnitude()));
-                            singleWriter.flush();
-                        } 
-                        if (values.getRelationshipObject1() != null) {
-                            VerletObject obj1 = objects.get(0); // Assuming first two objects
-                            VerletObject obj2 = objects.get(1);
-                            double distance = obj1.getPosition().distance(obj2.getPosition());
-                            double gravitationalForce = 0f; //calculateGravitationalForce(obj1, obj2);
-                            duoWriter.write(String.format("%.2f\t\t%.2f\t\t%.2f\n", elapsedTime, distance, gravitationalForce));
-                            duoWriter.flush();
-                        } 
-                        if (values.isTrackAll()) {
-                            allWriter.write(String.format("Time: %.2f\n", elapsedTime));
-
-                            // Chunk size (number of objects per line)
-                            int chunkSize = 10;
-
-                            // Write forces in chunks
-                            for (int i = 0; i < objects.size(); i++) {
-                                if (i % chunkSize == 0) {
-                                    if (i > 0) allWriter.write("\n"); // Start a new line for a new chunk
-                                    allWriter.write(String.format("Chunk %d:", i / chunkSize + 1));
-                                }
-
-                                // Write data for this object
-                                VerletObject obj = objects.get(i);
-                                allWriter.write(String.format("\tObj%d: %-10.2f", i + 1, obj.getForce().magnitude()));
-                            }
-                            allWriter.write("\n\n");
-                            allWriter.flush();
-                        }
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                    
-                }
-            };
-
-            StackPane root = new StackPane(canvas);
-            Scene scene = new Scene(root, WIDTH, HEIGHT);
-
-            primaryStage.setTitle("N-Body Simulation with Verlet Integration");
-            primaryStage.setScene(scene);
-            primaryStage.show();
-            timer.start();
-
-            gui.close();
+        
+        Button loadImageButton = new Button("Load Image Colors");
+        loadImageButton.setOnAction(e -> {
+            loadImageColors();
+            colorIndex = 0;
         });
+        
+        Button clearButton = new Button("Clear Scene");
+        clearButton.setOnAction(e -> {
+            clearScene();
+            colorIndex = 0;  // Reset color index but keep the color mapping
+        });
+        
+        Button toggleRunButton = new Button("Pause");
+        toggleRunButton.setOnAction(e -> {
+            isRunning = !isRunning;
+            toggleRunButton.setText(isRunning ? "Pause" : "Run");
+        });
+        
+        gui.getGrid().add(loadImageButton, 0, gui.getGrid().getRowCount());
+        gui.getGrid().add(clearButton, 0, gui.getGrid().getRowCount());
+        gui.getGrid().add(toggleRunButton, 0, gui.getGrid().getRowCount());
+        
+        Scene scene2 = new Scene(gui.getGrid(), 400, 600);
+        Stage secondaryStage = new Stage();
+        secondaryStage.setTitle("Simulation Controls");
+        secondaryStage.setScene(scene2);
 
-        Scene guiScene = new Scene(gui.getGrid(), 300, 475); 
-        primaryStage.setTitle("N-Body Configuration");
-        primaryStage.setScene(guiScene);
-        primaryStage.setResizable(false);
-        primaryStage.show();
-    }
+        initializeSimulation();
 
+        double offsetX = (screenBounds.getWidth() - SIM_WIDTH) / 2;
+        double offsetY = (screenBounds.getHeight() - SIM_HEIGHT) / 2;
 
-    private void initializeObjects(int numBodies, double mass, double massVariance, double diameter, double diameterVariance) {
-        Random rand = new Random();
-        for (int i = 0; i < numBodies; i++) {
-            double x = rand.nextDouble() * WIDTH;
-            double y = rand.nextDouble() * HEIGHT;
-            Point2D position = new Point2D(x, y);
-
-            double randomMass = (mass + (rand.nextDouble() - 0.5) * massVariance) * Math.pow(10, 10);
-            double randomDiameter = diameter + (rand.nextDouble() - 0.5) * diameterVariance;
-
-            VerletObject obj = new VerletObject(position, (float) randomDiameter / 2, (float) randomMass);
-            objects.add(obj);
-        }
-    }
-
-
-    private void updateObjects(float dt) {
-        for (VerletObject obj : objects) {
-            Point2D Grav = new Point2D(0,1);
-            // Update position using Verlet integration
-            obj.update(dt);
+        AnimationTimer timer = new AnimationTimer() {
+            private int frameCount = 0;
             
-            // Handle boundary conditions
-            Point2D pos = obj.getPosition();
-            Point2D newPos = new Point2D(
-                Math.max(obj.getRadius(), Math.min(WIDTH - obj.getRadius(), pos.getX())),
-                Math.max(obj.getRadius(), Math.min(HEIGHT - obj.getRadius(), pos.getY()))
-            );
-     
-            obj.SetPosition(newPos);
-            obj.AddAcceleration(Grav);
-        }
-    }
+            @Override
+            public void handle(long now) {
+                float dt = (lastTime == 0) ? 0.016f : (float)((now - lastTime) / 1e9);
+                lastTime = now;
 
+                gc.setFill(Color.BLACK);
+                gc.fillRect(0, 0, screenBounds.getWidth(), screenBounds.getHeight());
+                
+                gc.setFill(Color.GREY);
+                gc.fillRect(offsetX, offsetY, SIM_WIDTH, SIM_HEIGHT);
+
+                if (isRunning) {
+                    sim.AddStream();
+                    if (useImageColors) {
+                        List<VerletObject> objects = sim.getSystemManager().getObjects();
+                        while (colorIndex < objects.size() && colorIndex < streamColorMap.size()) {
+                            Color savedColor = streamColorMap.get(colorIndex);
+                            if (savedColor != null) {
+                                objects.get(colorIndex).setColor(savedColor);
+                                System.out.println("Applied color to new particle " + colorIndex); // Debug print
+                            }
+                            colorIndex++;
+                        }
+                    }
+                    sim.update();
+                    frameCount++;
+                }
+
+                gc.setStroke(Color.BLACK);
+                gc.setLineWidth(1);
+
+                for (VerletObject obj : sim.getSystemManager().getObjects()) {
+                    Point2D pos = obj.getPosition();
+                    float radius = obj.getRadius();
+                    double x = offsetX + pos.getX() - radius;
+                    double y = offsetY + pos.getY() - radius;
+                    double diameter = radius * 2;
+                    
+                    gc.setFill(obj.getColor());
+                    gc.fillOval(x, y, diameter, diameter);
+                    gc.strokeOval(x, y, diameter, diameter);
+                }
+            }
+        };
+
+        StackPane root = new StackPane(canvas);
+        Scene scene = new Scene(root);
+        primaryStage.setTitle("N-Body Simulation with Verlet Integration");
+        primaryStage.setScene(scene);
+        primaryStage.setMaximized(true);
+        primaryStage.show();
+        secondaryStage.show();
+        timer.start();
+    }
 
     public static void main(String[] args) {
         launch(args);
