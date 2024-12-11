@@ -1,9 +1,7 @@
 package nbody.PhysicsEngine;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.Vector;
 
 import javafx.geometry.Point2D;
@@ -30,7 +28,6 @@ public class CollisionManager {
     }
 
 
-
     public void SpatialHashCollision()
     {
         spatialHash.clear();
@@ -41,69 +38,74 @@ public class CollisionManager {
 
     }
 
-public void quadTreeCollision() {
-    float response_coef = 0.75f;
-    
-    QuadTree.QuadTreeObject<VerletObject> helper = new QuadTree.QuadTreeObject<>() {
-        @Override
-        public Point2D getPosition(VerletObject object) {
-            return object.getPosition();
+    public void quadTreeCollision() {
+        float response_coef = 0.75f;
+        
+        QuadTree.QuadTreeObject<VerletObject> helper = new QuadTree.QuadTreeObject<>() {
+            @Override
+            public Point2D getPosition(VerletObject object) {
+                return object.getPosition();
+            }
+            
+            @Override
+            public float getRadius(VerletObject object) {
+                return object.getRadius();
+            }
+
+            @Override
+            public double getMass(VerletObject object) {
+                return object.getMass();
+            }
+        };
+        
+        // Create quadtree
+        QuadTree<VerletObject> quadTree = new QuadTree<>(0, new QuadTree.Rectangle(0, 0, 2000, 2000), helper);
+        
+        // Insert all objects into quadtree
+        for (VerletObject obj : m_objects) {
+            if (obj.getPosition() != null) {  // Add null check
+                quadTree.insert(obj);
+            }
         }
         
-        @Override
-        public float getRadius(VerletObject object) {
-            return object.getRadius();
-        }
-    };
-    
-    // Create quadtree
-    QuadTree<VerletObject> quadTree = new QuadTree<>(0, new QuadTree.Rectangle(0, 0, 2000, 2000), helper);
-    
-    // Insert all objects into quadtree
-    for (VerletObject obj : m_objects) {
-        if (obj.getPosition() != null) {  // Add null check
-            quadTree.insert(obj);
-        }
-    }
-    
-    // Check collisions
-    List<VerletObject> potentialCollisions = new ArrayList<>();
-    for (VerletObject object1 : m_objects) {
-        if (object1.getPosition() == null) continue;  // Skip if position is null
-        
-        potentialCollisions.clear();
-        quadTree.findPotentialCollisions(object1, potentialCollisions);
-        
-        for (VerletObject object2 : potentialCollisions) {
-            if (object1 == object2) continue;
+        // Check collisions
+        List<VerletObject> potentialCollisions = new ArrayList<>();
+        for (VerletObject object1 : m_objects) {
+            if (object1.getPosition() == null) continue;  // Skip if position is null
             
-            Point2D position1 = object1.getPosition();
-            Point2D position2 = object2.getPosition();
+            potentialCollisions.clear();
+            quadTree.findPotentialCollisions(object1, potentialCollisions);
             
-            if (position1 == null || position2 == null) continue;  // Skip if either position is null
-            
-            float radius1 = object1.getRadius();
-            float radius2 = object2.getRadius();
+            for (VerletObject object2 : potentialCollisions) {
+                if (object1 == object2) continue;
+                
+                Point2D position1 = object1.getPosition();
+                Point2D position2 = object2.getPosition();
+                
+                if (position1 == null || position2 == null) continue;  // Skip if either position is null
+                
+                float radius1 = object1.getRadius();
+                float radius2 = object2.getRadius();
 
-            double dx = position1.getX() - position2.getX();
-            double dy = position1.getY() - position2.getY();
-            double distSquared = dx * dx + dy * dy;
-            float minDist = radius1 + radius2;
+                double dx = position1.getX() - position2.getX();
+                double dy = position1.getY() - position2.getY();
+                double distSquared = dx * dx + dy * dy;
+                float minDist = radius1 + radius2;
 
-            if (distSquared < minDist * minDist) {
-                double dist = Math.sqrt(distSquared);
-                Point2D normal = new Point2D(dx / dist, dy / dist);
+                if (distSquared < minDist * minDist) {
+                    double dist = Math.sqrt(distSquared);
+                    Point2D normal = new Point2D(dx / dist, dy / dist);
 
-                float massRatio1 = radius1 / (radius1 + radius2);
-                float massRatio2 = radius2 / (radius1 + radius2);
-                float delta = 0.5f * response_coef * ((float) dist - minDist);
+                    float massRatio1 = radius1 / (radius1 + radius2);
+                    float massRatio2 = radius2 / (radius1 + radius2);
+                    float delta = 0.5f * response_coef * ((float) dist - minDist);
 
-                object1.SetPosition(position1.subtract(normal.multiply(massRatio2 * delta)));
-                object2.SetPosition(position2.add(normal.multiply(massRatio1 * delta)));
+                    object1.SetPosition(position1.subtract(normal.multiply(massRatio2 * delta)));
+                    object2.SetPosition(position2.add(normal.multiply(massRatio1 * delta)));
+                }
             }
         }
     }
-}
 
 
 

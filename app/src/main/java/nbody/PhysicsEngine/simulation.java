@@ -29,6 +29,8 @@ public class simulation {
         box_bottom = 700;
         box_right = 700;
     }
+
+
     public void update()
     {
         m_time += GetStepDt();
@@ -54,6 +56,7 @@ public class simulation {
     public void SpatialHashingCollision(){
         collisionManager.SpatialHashCollision();
     }
+    
     public void applyConstraint(float dt) {
         for (VerletObject obj : systemManager.getObjects()) {
             float currentX = obj.getPositionX();
@@ -80,11 +83,13 @@ public class simulation {
         systemManager.StreamSpawnObject(spawnpos, radius);
 
     }
+
     public void ApplyGrav(){
         for (VerletObject obj : systemManager.getObjects()) {
             obj.AddAcceleration(grav);
         }
     }
+
     public void setSimuationUpdateRate(float rate){
         m_frame_dt = 1.0f / rate;
     }
@@ -93,7 +98,6 @@ public class simulation {
         m_sub_steps = sub_steps;
 
     }
-
 
     public VerletSystemManger getSystemManager() {
         return systemManager;

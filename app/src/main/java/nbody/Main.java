@@ -16,6 +16,7 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 import nbody.PhysicsEngine.CollisionManager;
+import nbody.PhysicsEngine.GravityManager;
 import nbody.PhysicsEngine.VerletObject;
 import nbody.gui.Maingui;
 
@@ -54,7 +55,7 @@ public class Main extends Application {
                             singleWriter = new BufferedWriter(new FileWriter("single_object_tracking.txt"));
                             singleWriter.write("Mass: " + objects.get(values.getSingleTrackObject()).getMass() + " kg\n");
                             singleWriter.write("Diameter: " + objects.get(values.getSingleTrackObject()).getRadius() * 2 + " m\n\n");
-                            singleWriter.write("Time (s)\tAcceleration (m/s²)\tVelocity (m/s)\tPosition (m, m)\t\tForces felt (N)\n");
+                            singleWriter.write("Time (s)\tAcceleration (m/s²)\tVelocity (m/s)\tPosition (m, m)\t\tForces felt (MN)\n");
                         } 
                         if (values.getRelationshipObject1() != null) {
                             duoWriter = new BufferedWriter(new FileWriter("two_object_relationship_tracking.txt"));
@@ -62,12 +63,12 @@ public class Main extends Application {
                             duoWriter.write("Diameter 1: " + objects.get(values.getRelationshipObject1()).getRadius() * 2 + " m\n");
                             duoWriter.write("Mass 2: " + objects.get(values.getRelationshipObject2()).getMass() + " kg\n");
                             duoWriter.write("Diameter 2: " + objects.get(values.getRelationshipObject2()).getRadius() * 2 + " m\n\n");
-                            duoWriter.write("Time (s)\tDistance (m)\tGravitational Force (N)\n");
+                            duoWriter.write("Time (s)\tDistance (m)\tGravitational Force (MN)\n");
                         } 
                         if (values.isTrackAll()) {
                             allWriter = new BufferedWriter(new FileWriter("all_object_tracking.txt"));
                             allWriter.write("Number of objects: " + objects.size() + "\n\n");
-                            allWriter.write("Time (s)     Force(N)");
+                            allWriter.write("Time (s)     Force(MN)");
                             allWriter.write("\n\n");
                         }
                     } 
@@ -103,10 +104,15 @@ public class Main extends Application {
                     // Update physics
                     updateObjects(dt);
 
-                    if (values.useBruteForce())
+                    if (values.useBruteForce()) {
                         collisionManager.BruteForceSolve();
-                    else
-                        return;
+                        GravityManager.computeForcesBruteForce(objects);
+                    }
+                    else {
+                        collisionManager.quadTreeCollision();
+                        //GravityManager.computeForcesWithQuadTree(objects);
+                        GravityManager.computeForcesBruteForce(objects);
+                    }
 
                     // Draw objects
                     gc.setFill(Color.SKYBLUE);
@@ -125,15 +131,15 @@ public class Main extends Application {
                                     elapsedTime, obj.getAcceleration().magnitude(),
                                     obj.getVelo(dt).magnitude(),
                                     obj.getPosition().getX(), obj.getPosition().getY(),
-                                    obj.getForce().magnitude()));
+                                    obj.getForce().magnitude() / 1e6));
                             singleWriter.flush();
                         } 
                         if (values.getRelationshipObject1() != null) {
                             VerletObject obj1 = objects.get(0); // Assuming first two objects
                             VerletObject obj2 = objects.get(1);
                             double distance = obj1.getPosition().distance(obj2.getPosition());
-                            double gravitationalForce = 0f; //calculateGravitationalForce(obj1, obj2);
-                            duoWriter.write(String.format("%.2f\t\t%.2f\t\t%.2f\n", elapsedTime, distance, gravitationalForce));
+                            double gravitationalForce = GravityManager.getMagnitudeForce(obj1, obj2);
+                            duoWriter.write(String.format("%.2f\t\t%.2f\t\t%.2f\n", elapsedTime, distance, gravitationalForce / 1e6));
                             duoWriter.flush();
                         } 
                         if (values.isTrackAll()) {
@@ -151,7 +157,7 @@ public class Main extends Application {
 
                                 // Write data for this object
                                 VerletObject obj = objects.get(i);
-                                allWriter.write(String.format("\tObj%d: %-10.2f", i + 1, obj.getForce().magnitude()));
+                                allWriter.write(String.format("\tObj%d: %-10.2f", i + 1, obj.getForce().magnitude() / 1e6));
                             }
                             allWriter.write("\n\n");
                             allWriter.flush();
@@ -189,7 +195,7 @@ public class Main extends Application {
             double y = rand.nextDouble() * HEIGHT;
             Point2D position = new Point2D(x, y);
 
-            double randomMass = (mass + (rand.nextDouble() - 0.5) * massVariance) * Math.pow(10, 10);
+            double randomMass = (mass + (rand.nextDouble() - 0.5) * massVariance) * 1e12;
             double randomDiameter = diameter + (rand.nextDouble() - 0.5) * diameterVariance;
 
             VerletObject obj = new VerletObject(position, (float) randomDiameter / 2, (float) randomMass);
@@ -212,7 +218,7 @@ public class Main extends Application {
             );
      
             obj.SetPosition(newPos);
-            obj.AddAcceleration(Grav);
+            //obj.AddAcceleration(Grav);
         }
     }
 

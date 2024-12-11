@@ -64,7 +64,7 @@ public class Maingui extends Application {
         grid.setPadding(new javafx.geometry.Insets(10));
 
         // Initialize components
-        massLabel = new Label("Mass * 10^10 (kg):");
+        massLabel = new Label("Mass * 10^12 (kg):");
         massField = createNumericTextField();
 
         massVarianceLabel = new Label("Mass Variance:");
