@@ -37,10 +37,6 @@ public class GravityManager {
 
         double distance = pos1.distance(pos2);
 
-        if (distance == 0) {
-            return Point2D.ZERO; // Avoid division by zero
-        }
-
         double forceMagnitude = G * obj1.getMass() * obj2.getMass() / (distance * distance);
         Point2D direction = pos2.subtract(pos1).normalize();
 
@@ -56,7 +52,7 @@ public class GravityManager {
 
 
 
-    /* 
+     
     // Method to compute gravitational forces using QuadTree 
     public static void computeForcesWithQuadTree(List<VerletObject> objects) {
         // Create a QuadTree based on the bounds of the simulation 
@@ -80,13 +76,20 @@ public class GravityManager {
         // Create the QuadTree with the appropriate bounds
         QuadTree<VerletObject> quadTree = new QuadTree<>(0, new QuadTree.Rectangle(0, 0, 2000, 2000), helper);
 
-        // Insert all objects into the QuadTree
+         // First, insert all objects into the tree
         for (VerletObject obj : objects) {
-            if (obj.getPosition() != null) {  // Null check to avoid inserting invalid objects
+            if (obj.getPosition() != null) {
+                quadTree.insert(obj);
+            }
+        }
+
+        // Then calculate forces for each object using the populated tree
+        for (VerletObject obj : objects) {
+            if (obj.getPosition() != null) {
                 Point2D force = quadTree.calculateForceUsingTree(obj, thetaThreshold);
                 obj.AddAcceleration(force.multiply(1 / obj.getMass()));
             }
         }
     }
-    */
+    
 }

@@ -14,8 +14,8 @@ public class QuadTree<T> {
     private QuadTree<T>[] nodes;
     private final QuadTreeObject<T> objectHelper;
 
-    //private double totalMass; // Combined mass of all objects
-    //private Point2D centerOfMass;
+    private double totalMass; // Combined mass of all objects
+    private Point2D centerOfMass;
 
 
     public interface QuadTreeObject<T> {
@@ -105,12 +105,11 @@ public class QuadTree<T> {
 
 
     public void insert(T object) {
-        //updateMassAndCenter(object);
-
         if (nodes[0] != null) {
             int index = getIndex(object);
             if (index != -1) {
                 nodes[index].insert(object);
+                updateMassAndCenter();
                 return;
             }
         }
@@ -133,6 +132,8 @@ public class QuadTree<T> {
                 }
             }
         }
+
+        updateMassAndCenter();
     }
 
 
@@ -159,20 +160,42 @@ public class QuadTree<T> {
         potentialCollisions.addAll(objects);
     }
 
-    /*
-    private void updateMassAndCenter(T object) {
-        double objectMass = objectHelper.getMass(object);
-        Point2D objectPos = objectHelper.getPosition(object);
     
-        if (centerOfMass == null) {
-            centerOfMass = objectPos;
-        } else {
-            centerOfMass = centerOfMass.multiply(totalMass)
-                           .add(objectPos.multiply(objectMass))
-                           .multiply(1 / (totalMass + objectMass));
+    private void updateMassAndCenter() {
+        totalMass = 0;
+        centerOfMass = null;
+    
+        // Include objects in the current node
+        for (T obj : objects) {
+            double objectMass = objectHelper.getMass(obj);
+            Point2D objectPos = objectHelper.getPosition(obj);
+    
+            if (centerOfMass == null) {
+                centerOfMass = objectPos.multiply(objectMass);
+            } else {
+                centerOfMass = centerOfMass.add(objectPos.multiply(objectMass));
+            }
+            totalMass += objectMass;
         }
     
-        totalMass += objectMass;
+        // Include contributions from child nodes
+        for (QuadTree<T> node : nodes) {
+            if (node != null) {
+                totalMass += node.getTotalMass();
+                if (node.getCenterOfMass() != null) {
+                    if (centerOfMass == null) {
+                        centerOfMass = node.getCenterOfMass().multiply(node.getTotalMass());
+                    } else {
+                        centerOfMass = centerOfMass.add(node.getCenterOfMass().multiply(node.getTotalMass()));
+                    }
+                }
+            }
+        }
+    
+        // Normalize centerOfMass
+        if (centerOfMass != null && totalMass > 0) {
+            centerOfMass = centerOfMass.multiply(1 / totalMass);
+        }
     }
 
      
@@ -182,14 +205,13 @@ public class QuadTree<T> {
             throw new IllegalArgumentException("Target must be a VerletObject");
         }
 
-        if (centerOfMass == null) {
-            return Point2D.ZERO;  // No contribution to force
-        }
-
         VerletObject verletTarget = (VerletObject) target;
-
         Point2D targetPos = objectHelper.getPosition(target);
         double targetMass = objectHelper.getMass(target);
+
+        if (centerOfMass == null || totalMass == 0) {
+            return Point2D.ZERO;  // Return zero force for empty nodes
+        }
 
         double distance = targetPos.distance(centerOfMass);
 
@@ -223,7 +245,7 @@ public class QuadTree<T> {
             return totalForce;
         }
     }
-    */
+    
 
 
     public double getBoundsWidth() {
@@ -233,7 +255,7 @@ public class QuadTree<T> {
     public double getBoundsHeight() {
         return bounds.height;
     }   
-    /* 
+     
     public double getTotalMass() {
         return totalMass;
     }
@@ -241,5 +263,5 @@ public class QuadTree<T> {
     public Point2D getCenterOfMass() {
         return centerOfMass;
     }
-    */
+    
 }

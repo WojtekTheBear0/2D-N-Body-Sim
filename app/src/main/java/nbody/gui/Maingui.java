@@ -98,7 +98,6 @@ public class Maingui extends Application {
         allCheck = new CheckBox("Track All Objects");
 
         bruteForceCheck = new CheckBox("Use Brute Force Calculation");
-        bruteForceCheck.setSelected(true);
 
         runButton = new Button("Run Simulation");
 

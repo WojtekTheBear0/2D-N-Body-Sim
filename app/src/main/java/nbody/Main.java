@@ -110,8 +110,7 @@ public class Main extends Application {
                     }
                     else {
                         collisionManager.quadTreeCollision();
-                        //GravityManager.computeForcesWithQuadTree(objects);
-                        GravityManager.computeForcesBruteForce(objects);
+                        GravityManager.computeForcesWithQuadTree(objects);
                     }
 
                     // Draw objects
