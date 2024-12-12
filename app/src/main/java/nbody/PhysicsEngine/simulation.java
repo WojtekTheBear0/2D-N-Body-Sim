@@ -6,6 +6,7 @@ import javafx.geometry.Point2D;
 public class simulation {
     private CollisionManager collisionManager;
     private VerletSystemManger systemManager;
+    private CollisionSystem currentCollisionSystem = CollisionSystem.QUAD_TREE;
     private Point2D grav;
     float box_right;
     float box_left;
@@ -14,7 +15,7 @@ public class simulation {
     int m_sub_steps = 1;
     float m_time = 0.0f;
     float m_frame_dt = 0.0f;
-    public final int NUMBER_OF_STREAMS = 9; // Default number of streams
+    public final int NUMBER_OF_STREAMS = 20; // Default number of streams
     private boolean isSpawning = true; // Add this field
     
     // Add these methods
@@ -28,7 +29,7 @@ public class simulation {
 
     public simulation(float width, float height) {
         // Initialize with multiple streams
-        systemManager = new VerletSystemManger(10000, 0.00005, NUMBER_OF_STREAMS);
+        systemManager = new VerletSystemManger(15000, 0.0000005, NUMBER_OF_STREAMS);
         Vector<VerletObject> objectVector = new Vector<>(systemManager.getObjects());
         collisionManager = new CollisionManager(objectVector);
         grav = new Point2D(0, 550.81);  // Default gravity
@@ -40,9 +41,15 @@ public class simulation {
     private void setupDefaultStreams(float width) {
         float streamSpacing = width / (NUMBER_OF_STREAMS + 1);
         for (int i = 0; i < NUMBER_OF_STREAMS; i++) {
-            systemManager.setSpawnPosition(i, new Point2D(streamSpacing * (i + 1), 100));
+            systemManager.setSpawnPosition(i, new Point2D(25, 50 + streamSpacing * (i + 1)));
         }
     }
+
+    public void setCollisionSystem(CollisionSystem system) {
+        this.currentCollisionSystem = system;
+    }
+
+    
     
     public void setBoundaries(float box_t, float box_b, float box_l, float box_r) {
         this.box_top = box_t;
@@ -62,17 +69,31 @@ public class simulation {
         m_time += GetStepDt();
         float step_dt = GetStepDt();
         
-
-        
         for (int i = m_sub_steps; i > 0; i--) {
             collisionManager.m_objects = new Vector<>(systemManager.getObjects());
-            collisionManager.quadTreeCollision();
+            
+            // Use the selected collision system
+            switch (currentCollisionSystem) {
+                case BRUTE_FORCE:
+                    collisionManager.BruteForceSolve();
+                    break;
+                case QUAD_TREE:
+                    collisionManager.quadTreeCollision();
+                    break;
+                case SPATIAL_HASH:
+                    collisionManager.SpatialHashCollision();
+                    break;
+                default:
+                    collisionManager.quadTreeCollision(); // Default to quad tree
+            }
+            
             ApplyGrav();
             applyConstraint(step_dt);
             updateObjects(step_dt);
         }
-    }
     
+    }
+
     public void updateObjects(float dt) {
         for (VerletObject obj : systemManager.getObjects()) {
             obj.update(dt);
@@ -115,14 +136,30 @@ public class simulation {
         }
     }
     
+
+
+
     public void setSimuationUpdateRate(float rate) {
         m_frame_dt = 1.0f / rate;
     }
-    
+
+
+    public void setObjectsPerStream(int temp){
+       systemManager.setNumberOfStreams(temp);
+    }
+    public void setStreamActive(boolean isStreaming){
+        systemManager.StreamActive = isStreaming;
+    }
+    public void setStreamRate(double temp){
+        systemManager.setSpawnRate(temp);
+    }
+
     public void setSubStepsCount(int sub_steps) {
         m_sub_steps = sub_steps;
     }
     
+
+
     public VerletSystemManger getSystemManager() {
         return systemManager;
     }

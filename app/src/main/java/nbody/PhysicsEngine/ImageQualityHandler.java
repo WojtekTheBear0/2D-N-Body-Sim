@@ -16,7 +16,7 @@ public class ImageQualityHandler {
     private double brightness = 0;
     private double contrast = 1;
     private double saturation = 1;
-    private double blurRadius = 0;
+    private double blurRadius = 1;
     
     public ImageQualityHandler() {
         this.colorCache = new ConcurrentHashMap<>(CACHE_SIZE);

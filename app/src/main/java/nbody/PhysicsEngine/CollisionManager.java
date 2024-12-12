@@ -11,6 +11,7 @@ import java.util.concurrent.Executors;
 
 import javafx.geometry.Point2D;
 
+
 public class CollisionManager {
     float friction;
     float gravity;

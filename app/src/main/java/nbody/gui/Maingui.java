@@ -1,239 +1,394 @@
 package nbody.gui;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
-import java.util.function.UnaryOperator;
-import java.util.regex.Pattern;
-
 import javafx.application.Application;
+import javafx.application.Platform;
+import javafx.geometry.Point2D;
 import javafx.scene.Scene;
-import javafx.scene.control.Button;
-import javafx.scene.control.CheckBox;
-import javafx.scene.control.Label;
-import javafx.scene.control.TextField;
-import javafx.scene.control.TextFormatter;
+import javafx.scene.control.*;
+import javafx.scene.image.Image;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
 import javafx.stage.Stage;
+import nbody.PhysicsEngine.CollisionSystem; // Create this enum if not existing
+import nbody.PhysicsEngine.ImageQualityHandler;
+import nbody.PhysicsEngine.VerletObject;
+import nbody.PhysicsEngine.simulation;
+
+
+
+
 
 public class Maingui extends Application {
+    private static final int SIM_WIDTH = 500;
+    private static final int SIM_HEIGHT = 500;
 
     private GridPane grid;
     private Consumer<SimulationValues> onRun;
-
-    // GUI elements
-    private Label massLabel;
-    private TextField massField;
-
-    private Label massVarianceLabel;
-    private TextField massVarianceField;
-
-    private Label diameterLabel;
-    private TextField diameterField;
-
-    private Label diameterVarianceLabel;
-    private TextField diameterVarianceField;
-
-    private Label objectCountLabel;
-    private TextField objectCountField;
-
-    private Label trackDurationLabel;
-    private TextField trackDurationField;
-
-    private CheckBox trackSingleCheck;
-    private Label singleTrackLabel;
-    private TextField singleTrackField;
-
-    private CheckBox trackRelationshipsCheck;
-    private Label firstObjectLabel;
-    private TextField firstObjectField;
-
-    private Label secondObjectLabel;
-    private TextField secondObjectField;
-
-    private CheckBox allCheck;
-
-    private CheckBox bruteForceCheck;
-
     private Button runButton;
+    private Button loadImageButton;
+    private Button clearButton;
+    private Button toggleRunButton;
+    private RadioButton bruteForceButton;
+    private RadioButton quadTreeButton;
+    private RadioButton spatialHashButton;
+    private ToggleGroup collisionGroup;
+    private Button addObjectButton;
+    private Button toggleStreamButton;
+    private Slider streamRateSlider;
+    private Slider streamCountSlider;
+    private Label objectCountLabel;
+    private CheckBox useImageColorsCheckBox; // Added CheckBox
+    private boolean isStreaming = false;
+    private boolean isRunning = true;
+    private simulation sim;
+
+    private boolean useImageColors = false;
+    private Map<Integer, Color> streamColorMap = new HashMap<>();
+    private int totalParticlesCreated = 0;
+    private ImageQualityHandler imageHandler = new ImageQualityHandler();
 
     public Maingui() {
-        // Initialize the grid
         grid = new GridPane();
-        
         grid.setHgap(10);
         grid.setVgap(10);
         grid.setPadding(new javafx.geometry.Insets(10));
 
-        // Initialize components
-        massLabel = new Label("Mass * 10^10 (kg):");
-        massField = createNumericTextField();
+        initializeButtons();
+        setupButtonHandlers();
+        addButtonsToGrid();
+    }
 
-        massVarianceLabel = new Label("Mass Variance:");
-        massVarianceField = createNumericTextField();
-
-        diameterLabel = new Label("Diameter (m):");
-        diameterField = createNumericTextField();
-
-        diameterVarianceLabel = new Label("Diameter Variance:");
-        diameterVarianceField = createNumericTextField();
-
-        objectCountLabel = new Label("Number of Objects:");
-        objectCountField = createNumericTextField();
-
-        trackDurationLabel = new Label("Time to Track (s):");
-        trackDurationField = createNumericTextField();
-
-        trackSingleCheck = new CheckBox("Track Object");
-
-        singleTrackLabel = new Label("Object to Track:");
-        singleTrackField = createNumericTextField();
-
-        trackRelationshipsCheck = new CheckBox("Track Specific Relationship");
-
-        firstObjectLabel = new Label("Object 1:");
-        firstObjectField = createNumericTextField();
-
-        secondObjectLabel = new Label("Object 2:");
-        secondObjectField = createNumericTextField();
-
-        allCheck = new CheckBox("Track All Objects");
-
-        bruteForceCheck = new CheckBox("Use Brute Force Calculation");
-        bruteForceCheck.setSelected(true);
-
+    private void initializeButtons() {
         runButton = new Button("Run Simulation");
+        loadImageButton = new Button("Load Image Colors");
+        clearButton = new Button("Clear Scene");
+        toggleRunButton = new Button("Pause");
 
+        collisionGroup = new ToggleGroup();
 
-        // Update checkboxes to enable/disable relevant fields
-        trackSingleCheck.setOnAction(e -> {
-            boolean selected = trackSingleCheck.isSelected();
-            singleTrackLabel.setDisable(!selected);
-            singleTrackField.setDisable(!selected);
-        });
+        bruteForceButton = new RadioButton("Brute Force");
+        quadTreeButton = new RadioButton("Quad Tree");
+        spatialHashButton = new RadioButton("Spatial Hash");
 
-        trackRelationshipsCheck.setOnAction(e -> {
-            boolean selected = trackRelationshipsCheck.isSelected();
-            firstObjectLabel.setDisable(!selected);
-            firstObjectField.setDisable(!selected);
-            secondObjectLabel.setDisable(!selected);
-            secondObjectField.setDisable(!selected);
-        });
+        bruteForceButton.setToggleGroup(collisionGroup);
+        quadTreeButton.setToggleGroup(collisionGroup);
+        spatialHashButton.setToggleGroup(collisionGroup);
+        bruteForceButton.setSelected(true);
 
+        addObjectButton = new Button("Add Single Object");
+        toggleStreamButton = new Button("Start Stream");
 
+        streamRateSlider = new Slider(1, 60, 10);
+        streamRateSlider.setShowTickLabels(true);
+        streamRateSlider.setShowTickMarks(true);
+        streamRateSlider.setMajorTickUnit(10);
+        streamRateSlider.setBlockIncrement(1);
+        streamRateSlider.setTooltip(new Tooltip("Objects per second"));
+
+        streamCountSlider = new Slider(1, 10, 3);
+        streamCountSlider.setShowTickLabels(true);
+        streamCountSlider.setShowTickMarks(true);
+        streamCountSlider.setMajorTickUnit(1);
+        streamCountSlider.setBlockIncrement(1);
+        streamCountSlider.setMinorTickCount(0);
+        streamCountSlider.setSnapToTicks(true);
+        streamCountSlider.setTooltip(new Tooltip("Objects per stream"));
+
+        objectCountLabel = new Label("Objects: 0");
+
+        // Initialize the Use Image Colors CheckBox
+        useImageColorsCheckBox = new CheckBox("Use Image Colors");
+        useImageColorsCheckBox.setSelected(useImageColors); // Set initial state
+    }
+
+    private void setupButtonHandlers() {
         runButton.setOnAction(e -> {
+            isRunning = true;
+            isStreaming = true;
             if (onRun != null) {
-                Integer singleTrackObject = trackSingleCheck.isSelected() ? Integer.parseInt(singleTrackField.getText()) : null;
-                Integer relationshipObject1 = trackRelationshipsCheck.isSelected() ? Integer.parseInt(firstObjectField.getText()) : null;
-                Integer relationshipObject2 = trackRelationshipsCheck.isSelected() ? Integer.parseInt(secondObjectField.getText()) : null;
-        
                 SimulationValues values = new SimulationValues(
-                        Double.parseDouble(massField.getText()),
-                        Double.parseDouble(massVarianceField.getText()),
-                        Double.parseDouble(diameterField.getText()),
-                        Double.parseDouble(diameterVarianceField.getText()),
-                        Integer.parseInt(objectCountField.getText()),
-                        Double.parseDouble(trackDurationField.getText()),
-                        singleTrackObject,
-                        relationshipObject1,
-                        relationshipObject2,
-                        allCheck.isSelected(),
-                        bruteForceCheck.isSelected()
+                    10.0, 1.0, 10.0, 1.0, 50, 10.0,
+                    null, null, null, false, true
                 );
                 onRun.accept(values);
             }
         });
 
-        // Add components to the grid
-        int row = 0;
-        grid.add(massLabel, 0, row);
-        grid.add(massField, 1, row++);
+        loadImageButton.setOnAction(e -> {
+            if (sim != null) {
+                loadImageColors();
+            }
+        });
 
-        grid.add(massVarianceLabel, 0, row);
-        grid.add(massVarianceField, 1, row++);
+        clearButton.setOnAction(e -> {
+            if (sim != null) {
+                sim.getSystemManager().clearObjects();
+                updateObjectCount();
+                resetColorMap(); // Reset color mapping after clearing
+            }
+        });
 
-        grid.add(diameterLabel, 0, row);
-        grid.add(diameterField, 1, row++);
+        toggleRunButton.setOnAction(e -> {
+            isRunning = !isRunning;
+            toggleRunButton.setText(isRunning ? "Pause" : "Run");
+        });
 
-        grid.add(diameterVarianceLabel, 0, row);
-        grid.add(diameterVarianceField, 1, row++);
+        bruteForceButton.setOnAction(e -> {
+            if (sim != null) sim.setCollisionSystem(CollisionSystem.BRUTE_FORCE);
+        });
 
-        grid.add(objectCountLabel, 0, row);
-        grid.add(objectCountField, 1, row++);
+        quadTreeButton.setOnAction(e -> {
+            if (sim != null) sim.setCollisionSystem(CollisionSystem.QUAD_TREE);
+        });
 
-        grid.add(trackDurationLabel, 0, row);
-        grid.add(trackDurationField, 1, row++);
+        spatialHashButton.setOnAction(e -> {
+            if (sim != null) sim.setCollisionSystem(CollisionSystem.SPATIAL_HASH);
+        });
 
-        grid.add(trackSingleCheck, 0, row, 2, 1);
-        row++;
+        addObjectButton.setOnAction(e -> {
+            if (sim != null) {
+                Point2D center = new Point2D(SIM_WIDTH / 2, SIM_HEIGHT / 2);
+                // sim.addObjectInstantly(center);
+                updateObjectCount();
+            }
+        });
 
-        grid.add(singleTrackLabel, 0, row);
-        grid.add(singleTrackField, 1, row++);
+        toggleStreamButton.setOnAction(e -> {
+            if (sim != null) {
+                isStreaming = !isStreaming;
+                toggleStreamButton.setText(isStreaming ? "Stop Stream" : "Start Stream");
+                
+                // Only set parameters if streaming is being started
+                if (isStreaming) {
+                    sim.setStreamActive(true);
+                    sim.setStreamRate(streamRateSlider.getValue());
+                    sim.setObjectsPerStream((int) streamCountSlider.getValue());
+                } else {
+                    sim.setStreamActive(false);
+                }
+            }
+        });
+        
+        streamRateSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (sim != null && isStreaming) {
+                sim.setStreamRate(newVal.doubleValue());
+            }
+        });
 
-        grid.add(trackRelationshipsCheck, 0, row, 2, 1);
-        row++;
+        streamCountSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (sim != null && isStreaming) {
+                int objectsPerStream = newVal.intValue();
+                sim.setObjectsPerStream(objectsPerStream);
+            }
+        });
 
-        grid.add(firstObjectLabel, 0, row);
-        grid.add(firstObjectField, 1, row++);
+        // Handle Use Image Colors CheckBox
+        useImageColorsCheckBox.setOnAction(e -> {
+            useImageColors = useImageColorsCheckBox.isSelected();
+            if (sim != null) {
+                if (useImageColors) {
+                    applyExistingColorMap();
+                } else {
+                    resetObjectColors();
+                }
+            }
+        });
 
-        grid.add(secondObjectLabel, 0, row);
-        grid.add(secondObjectField, 1, row++);
+        Button closeButton = new Button("Close Simulation");
+    closeButton.setOnAction(e -> {
+        // Gracefully shut down the simulation
+        if (sim != null) {
+            // Stop spawning
+            sim.pauseSpawning();
+            
+            // Clear objects
+            Platform.runLater(() -> {
+                sim.clearObjects();
+                
+                // Close any open stages or windows
+                Stage stage = (Stage) grid.getScene().getWindow();
+                stage.close();
+            });
+        }
+    });
 
-        grid.add(allCheck, 0, row, 2, 1);
-        row++;
 
-        grid.add(bruteForceCheck, 0, row, 2, 1);
-        row++;
+    grid.add(closeButton, 0, 6); // Adjust the row as needed
 
-        grid.add(runButton, 1, row, 1, 1);
+    }
+
+    private void addButtonsToGrid() {
+        VBox collisionBox = new VBox(5);
+        collisionBox.getChildren().addAll(
+            new Label("Collision System:"),
+            bruteForceButton,
+            quadTreeButton,
+            spatialHashButton
+        );
+
+        VBox objectBox = new VBox(5);
+        objectBox.getChildren().addAll(
+            new Label("Objects:"),
+            addObjectButton,
+            new Label("Stream Controls:"),
+            new Label("Rate (per second):"),
+            streamRateSlider,
+            new Label("Count per stream:"),
+            streamCountSlider,
+            toggleStreamButton,
+            objectCountLabel,
+            useImageColorsCheckBox // Add the CheckBox here
+        );
+
+        grid.add(collisionBox, 0, 0);
+        grid.add(objectBox, 0, 1);
+        grid.add(runButton, 0, 2);
+        grid.add(loadImageButton, 0, 3);
+        grid.add(clearButton, 0, 4);
+        grid.add(toggleRunButton, 0, 5);
     }
 
 
-    @Override
-    public void start(Stage primaryStage) {
-        Scene scene = new Scene(getGrid(), 300, 450);
-        primaryStage.setTitle("N-Body Simulation");
-        primaryStage.setScene(scene);
-        primaryStage.setResizable(false);
-
-        primaryStage.show();
+    private Color getColorForPosition(Point2D position) {
+        return imageHandler.getColorForPosition(position, SIM_WIDTH, SIM_HEIGHT);
     }
 
     
+
+    /**
+     * Loads image colors and populates the streamColorMap.
+     */
+    private void loadImageColors() {
+        try {
+            Image sourceImage = new Image(getClass().getResourceAsStream("/images/JOIN.png"));
+            if (sourceImage.isError()) {
+                System.err.println("Error loading image: " + sourceImage.getException());
+                return;
+            }
+
+            imageHandler.loadAndProcessImage(sourceImage, SIM_WIDTH, SIM_HEIGHT);
+            useImageColors = true;
+
+            streamColorMap.clear();
+            List<VerletObject> objects = sim.getSystemManager().getObjects();
+            for (int i = 0; i < objects.size(); i++) {
+                Point2D pos = objects.get(i).getPosition();
+                Color color = getColorForPosition(pos);
+                streamColorMap.put(i, color);
+                objects.get(i).setColor(color);
+                // System.out.println("Saved color for particle " + i + ": " + color);
+            }
+            totalParticlesCreated = objects.size();
+
+            // Optionally, automatically apply the color map if "Use Image Colors" is checked
+            if (useImageColors) {
+                applyExistingColorMap();
+            }
+
+        } catch (Exception e) {
+            System.err.println("Failed to load image: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Applies the existing color map to the simulation objects.
+     * This method ensures that the color map is applied without reloading the image.
+     */
+    private void applyExistingColorMap() {
+        if (streamColorMap.isEmpty()) {
+            System.err.println("No color map loaded. Please load image colors first.");
+            useImageColorsCheckBox.setSelected(false);
+            useImageColors = false;
+            return;
+        }
+
+        List<VerletObject> objects = sim.getSystemManager().getObjects();
+
+        for (int i = 0; i < objects.size(); i++) {
+            Color savedColor = streamColorMap.get(i);
+            if (savedColor != null) {
+                objects.get(i).setColor(savedColor);
+                System.out.println("Applied color to particle " + i);
+            }
+        }
+    }
+
+    /**
+     * Resets the color map after clearing the simulation.
+     */
+    private void resetColorMap() {
+        // Optionally reset the color map or maintain it for future runs
+        // Here, we maintain the color map for future simulation runs
+        // If you want to reset it, uncomment the following line:
+        // streamColorMap.clear();
+        
+    }
+
+    private void resetObjectColors() {
+        useImageColors = false;
+        // Keep the streamColorMap intact for future runs
+        List<VerletObject> objects = sim.getSystemManager().getObjects();
+        for (VerletObject obj : objects) {
+            obj.setColor(Color.WHITE); // Reset to default color
+        }
+    }
+
+    public void updateObjectCount() {
+        if (sim != null) {
+            int count = sim.getSystemManager().getObjects().size();
+            objectCountLabel.setText("Objects: " + count);
+        }
+    }
+
+    public void setSimulation(simulation sim) {
+        this.sim = sim;
+    }
+
+    @Override
+    public void start(Stage primaryStage) {
+        Scene scene = new Scene(grid, 300, 500); // Increased height to accommodate new CheckBox
+        primaryStage.setTitle("N-Body Simulation");
+        primaryStage.setScene(scene);
+        primaryStage.show();
+    }
+
     public void setOnRun(Consumer<SimulationValues> onRun) {
         this.onRun = onRun;
     }
-
 
     public void close() {
         ((Stage) grid.getScene().getWindow()).close();
     }
 
-
-    // Method to create numeric TextField
-    private TextField createNumericTextField() {
-        TextField textField = new TextField();
-        Pattern pattern = Pattern.compile("\\d*\\.?\\d*"); // Only digits allowed
-        UnaryOperator<TextFormatter.Change> filter = change -> {
-            if (pattern.matcher(change.getControlNewText()).matches()) {
-                return change;
-            }
-            return null;
-        };
-        TextFormatter<String> textFormatter = new TextFormatter<>(filter);
-        textField.setTextFormatter(textFormatter);
-        return textField;
-    }
-
-
-    // Getter for the grid
     public GridPane getGrid() {
         return grid;
     }
 
+    public boolean isRunning() {
+        return isRunning;
+    }
+
+    public boolean isUsingImageColors() {
+        return useImageColors;
+    }
+
+    public Map<Integer, Color> getStreamColorMap() {
+        return streamColorMap;
+    }
+
+    public boolean isStreaming() {
+        return isStreaming;
+    }
 
     public static void main(String[] args) {
         launch(args);
     }
-
 
     public static class SimulationValues {
         private final double mass;
@@ -265,48 +420,16 @@ public class Maingui extends Application {
             this.bruteForce = bruteForce;
         }
 
-        public double getMass() {
-            return mass;
-        }
-
-        public double getMassVariance() {
-            return massVariance;
-        }
-
-        public double getDiameter() {
-            return diameter;
-        }
-
-        public double getDiameterVariance() {
-            return diameterVariance;
-        }
-
-        public int getObjectCount() {
-            return objectCount;
-        }
-
-        public double getTimeToTrack() {
-            return timeToTrack;
-        }
-
-        public Integer getSingleTrackObject() {
-            return singleTrackObject;
-        }
-
-        public Integer getRelationshipObject1() {
-            return relationshipObject1;
-        }
-
-        public Integer getRelationshipObject2() {
-            return relationshipObject2;
-        }
-
-        public boolean isTrackAll() {
-            return trackAll;
-        }
-
-        public boolean useBruteForce() {
-            return bruteForce;
-        }
+        public double getMass() { return mass; }
+        public double getMassVariance() { return massVariance; }
+        public double getDiameter() { return diameter; }
+        public double getDiameterVariance() { return diameterVariance; }
+        public int getObjectCount() { return objectCount; }
+        public double getTimeToTrack() { return timeToTrack; }
+        public Integer getSingleTrackObject() { return singleTrackObject; }
+        public Integer getRelationshipObject1() { return relationshipObject1; }
+        public Integer getRelationshipObject2() { return relationshipObject2; }
+        public boolean isTrackAll() { return trackAll; }
+        public boolean useBruteForce() { return bruteForce; }
     }
 }
